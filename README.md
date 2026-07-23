@@ -1,13 +1,11 @@
 # asdf-lein
 
-[![Build Status](https://travis-ci.org/miorimmax/asdf-lein.svg?branch=master)](https://travis-ci.org/miorimmax/asdf-lein)
-
 [Leiningen](https://leiningen.org/) plugin for [asdf](https://github.com/asdf-vm/asdf) version manager
 
 ## Install
 
 ```shell
-asdf plugin-add lein https://github.com/miorimmax/asdf-lein.git
+asdf plugin-add lein https://github.com/b-social/asdf-lein.git
 ```
 
 ## Requirements
