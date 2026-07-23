@@ -11,7 +11,7 @@ install_lein() {
 
     local tmp_file
     tmp_file="$(mktemp)"
-    trap 'rm -f "$tmp_file"' EXIT
+    trap "rm -f \"$tmp_file\"" EXIT
 
     echo "Downloading lein $version from $url"
     if ! curl --fail --show-error --silent --location \
