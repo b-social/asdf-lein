@@ -1,18 +1,40 @@
 #!/usr/bin/env bash
-set -eo pipefail
+set -euo pipefail
 
 install_lein() {
     local version=$1
     local install_path=$2
+    local bin_path="$install_path/bin"
+    local url="https://codeberg.org/leiningen/leiningen/raw/tag/$version/bin/lein"
 
-    mkdir -p "$install_path/bin"
+    mkdir -p "$bin_path"
 
-    curl --silent \
-         --location \
-         --output "$install_path/bin/lein" \
-         "https://codeberg.org/leiningen/leiningen/raw/tag/$version/bin/lein"
+    local tmp_file
+    tmp_file="$(mktemp)"
+    trap 'rm -f "$tmp_file"' EXIT
 
-    chmod a+x "$install_path/bin/lein"
+    echo "Downloading lein $version from $url"
+    if ! curl --fail --show-error --silent --location \
+              --retry 3 --retry-delay 1 \
+              --output "$tmp_file" \
+              "$url"; then
+        echo "Error: failed to download lein $version from $url" >&2
+        echo "Check that '$version' is a valid Leiningen tag (see: asdf list-all lein)." >&2
+        exit 1
+    fi
+
+    # Sanity-check the download before installing it.
+    if [ ! -s "$tmp_file" ]; then
+        echo "Error: downloaded lein script is empty." >&2
+        exit 1
+    fi
+    if ! head -n 1 "$tmp_file" | grep -q '^#!'; then
+        echo "Error: downloaded file does not look like a script (no shebang)." >&2
+        echo "The server may have returned an error page instead of the lein script." >&2
+        exit 1
+    fi
+
+    install -m 0755 "$tmp_file" "$bin_path/lein"
 }
 
 install_lein "$ASDF_INSTALL_VERSION" "$ASDF_INSTALL_PATH"
