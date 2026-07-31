@@ -1,11 +1,42 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Downloads the lein script from a single URL into tmp_file and validates it.
+# Returns 0 on success, non-zero if the download failed or looks invalid.
+download_lein() {
+    local url=$1
+    local tmp_file=$2
+
+    if ! curl --fail --show-error --silent --location \
+              --retry 3 --retry-delay 1 \
+              --output "$tmp_file" \
+              "$url"; then
+        return 1
+    fi
+
+    # Sanity-check the download before treating it as usable.
+    if [ ! -s "$tmp_file" ]; then
+        echo "Warning: file from $url is empty." >&2
+        return 1
+    fi
+    if ! head -n 1 "$tmp_file" | grep -q '^#!'; then
+        echo "Warning: file from $url does not look like a script (no shebang)." >&2
+        return 1
+    fi
+
+    return 0
+}
+
 install_lein() {
     local version=$1
     local install_path=$2
     local bin_path="$install_path/bin"
-    local url="https://codeberg.org/leiningen/leiningen/raw/tag/$version/bin/lein"
+
+    # Sources are tried in order; GitHub first, Codeberg as a fallback.
+    local urls=(
+        "https://raw.githubusercontent.com/technomancy/leiningen/$version/bin/lein"
+        "https://codeberg.org/leiningen/leiningen/raw/tag/$version/bin/lein"
+    )
 
     mkdir -p "$bin_path"
 
@@ -13,28 +44,19 @@ install_lein() {
     tmp_file="$(mktemp)"
     trap "rm -f \"$tmp_file\"" EXIT
 
-    echo "Downloading lein $version from $url"
-    if ! curl --fail --show-error --silent --location \
-              --retry 3 --retry-delay 1 \
-              --output "$tmp_file" \
-              "$url"; then
-        echo "Error: failed to download lein $version from $url" >&2
-        echo "Check that '$version' is a valid Leiningen tag (see: asdf list-all lein)." >&2
-        exit 1
-    fi
+    local url
+    for url in "${urls[@]}"; do
+        echo "Downloading lein $version from $url"
+        if download_lein "$url" "$tmp_file"; then
+            install -m 0755 "$tmp_file" "$bin_path/lein"
+            return 0
+        fi
+        echo "Download from $url failed, trying next source..." >&2
+    done
 
-    # Sanity-check the download before installing it.
-    if [ ! -s "$tmp_file" ]; then
-        echo "Error: downloaded lein script is empty." >&2
-        exit 1
-    fi
-    if ! head -n 1 "$tmp_file" | grep -q '^#!'; then
-        echo "Error: downloaded file does not look like a script (no shebang)." >&2
-        echo "The server may have returned an error page instead of the lein script." >&2
-        exit 1
-    fi
-
-    install -m 0755 "$tmp_file" "$bin_path/lein"
+    echo "Error: failed to download lein $version from all sources." >&2
+    echo "Check that '$version' is a valid Leiningen tag (see: asdf list-all lein)." >&2
+    exit 1
 }
 
 install_lein "$ASDF_INSTALL_VERSION" "$ASDF_INSTALL_PATH"
